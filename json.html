@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nera JSON Translator</title>
+<style>
+  body {
+    font-family: sans-serif;
+    background: #f7f7f7;
+    padding: 2rem;
+  }
+
+  .container {
+    width: 60%;
+    margin: 0 auto;
+  }
+
+  input, button {
+    width: 100%;
+    padding: 0.5rem;
+    margin: 0.5rem 0;
+    font-size: 1rem;
+  }
+
+  .output {
+    margin-top: 1rem;
+    background: #fff;
+    padding: 1rem;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Nera JSON Translator</h1>
+  <p>Upload a JSON file and translate all English strings into Nera!</p>
+
+  <input type="file" id="jsonFile" accept=".json"/>
+  <button onclick="translateJSON()">Translate</button>
+  <button onclick="downloadJSON()">Download Translated JSON</button>
+
+  <div class="output" id="output"></div>
+</div>
+
+<script>
+const syllablePool = [
+  "ot", "an", "o", "ai", "in", "ea", "e",
+  "on", "ou", "ir", "ar", "el", "un", "fi",
+  "im", "as", "au", "is", "or", "em", "il",
+  "en", "er", "ui", "os", "ou", "ay", "lo",
+  "ka", "su", "mi", "to", "ra", "na", "ko",
+  "ri", "mo", "la", "lu", "ne", "yo", "no"
+];
+
+function hashWord(str, poolLength) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) % poolLength;
+  }
+  return hash;
+}
+
+function fuseWord(word) {
+  if (!/\w/.test(word)) return word;
+  const half = Math.ceil(word.length / 2);
+  const revFirst = word.slice(0, half).split("").reverse().join("");
+  const index = hashWord(word, syllablePool.length);
+  const frEnd = syllablePool[index];
+  return revFirst + frEnd;
+}
+
+// Recursively translate all string values in the JSON
+function translateObject(obj) {
+  if (typeof obj === 'string') return obj.split(/\b/).map(w => /\w/.test(w)? fuseWord(w) : w).join('');
+  if (Array.isArray(obj)) return obj.map(translateObject);
+  if (typeof obj === 'object' && obj !== null) {
+    const result = {};
+    for (const key in obj) {
+      result[key] = translateObject(obj[key]);
+    }
+    return result;
+  }
+  return obj;
+}
+
+let translatedJSON = null;
+
+function translateJSON() {
+  const fileInput = document.getElementById('jsonFile');
+  if (!fileInput.files[0]) {
+    alert("Please select a JSON file!");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const json = JSON.parse(e.target.result);
+      translatedJSON = translateObject(json);
+      document.getElementById('output').innerText = JSON.stringify(translatedJSON, null, 2);
+    } catch (err) {
+      alert("Invalid JSON file!");
+      console.error(err);
+    }
+  }
+  reader.readAsText(fileInput.files[0]);
+}
+
+function downloadJSON() {
+  if (!translatedJSON) {
+    alert("No translated JSON available. Translate a file first.");
+    return;
+  }
+  const blob = new Blob([JSON.stringify(translatedJSON, null, 2)], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "translated.json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
